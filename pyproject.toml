@@ -1,0 +1,23 @@
+[project]
+name = "kourain_lib"
+version = "0.2.0"
+authors = [
+  { name="Kourain", email="maiquyen16503@gmail.com" },
+]
+description = "A small lib package"
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+
+[project.urls]
+Homepage = "https://github.com/kourain/kourain_lib"
+Issues = "https://github.com/kourain/kourain_lib/issues"
+
+[build-system]
+requires = ["uv_build >= 0.9.21"]
+build-backend = "uv_build"
