@@ -2,9 +2,9 @@ from abc import ABC
 import builtins
 from typing import Any
 
-from src.dynamic_property.dict import ObservableDict
-from src.dynamic_property.list import ObservableList
-from src.dynamic_property.set import ObservableSet
+from .dynamic_property.dict import ObservableDict
+from .dynamic_property.list import ObservableList
+from .dynamic_property.set import ObservableSet
 
 
 class PropertyTracker(ABC):
@@ -12,26 +12,24 @@ class PropertyTracker(ABC):
         cls.safe_type_check: bool = True
         cls.change_history: list[tuple[str, Any, Any]] = []
         cls.dynamic_properties_history: dict[str, list[dict[str, str]]] = {}
-        cls.ignore_tracking: list[str]
+        cls.ignore_tracking: list[str] = []
         return super().__new__(cls)
 
     def _on_dynamic_property_change(
-        self, name: str, action: str, index, value, old_values: Any = None
+        self, name: str, action: str, index: int, value: Any, old_values: Any = None
     ):
-        print(name)
         if name not in self.dynamic_properties_history:
             self.dynamic_properties_history[name] = []
         self.dynamic_properties_history[name].append(
             {
                 "action": action,
                 "index": str(index),
-                "new_value": value,
+                "new_value": str(value),
                 "len_old_value": str(
-                    old_values.__len__() if old_values is not None else None
+                    len(old_values) if old_values is not None else 0
                 ),
             }
         )
-
     def __setattr__(self, name: str, value: Any) -> None:
         if name in (
             "is_changed",

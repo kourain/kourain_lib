@@ -1,5 +1,6 @@
 import builtins
 import time
+from typing import Final
 from uuid import UUID, SafeUUID
 import random
 import datetime
@@ -75,7 +76,6 @@ class UUIDv7(UUID):
 
         # Chuyển thành định dạng UUID chuẩn
         uuid_bytes = uuid_int.to_bytes(16, byteorder="big")
-        self.__int_ = uuid_int
         uuid_hex = uuid_bytes.hex()
         super().__init__(hex=uuid_hex, is_safe=SafeUUID.safe)
 
@@ -120,11 +120,11 @@ class UUIDv7(UUID):
 
 
 class SnowflakeID(int):
-    EPOCH = int(datetime.datetime.now().timestamp() * 1000)  # Custom epoch (ms)
-    __NODE_ID_BITS = 10
-    __SEQUENCE_BITS = 12
-    max_node_id = (1 << __NODE_ID_BITS) - 1
-    max_sequence = (1 << __SEQUENCE_BITS) - 1
+    EPOCH: Final[int] = int(datetime.datetime.now().timestamp() * 1000)  # Custom epoch (ms)
+    __NODE_ID_BITS: Final[int] = 10
+    __SEQUENCE_BITS: Final[int] = 12
+    max_node_id: Final[int] = (1 << __NODE_ID_BITS) - 1
+    max_sequence: Final[int] = (1 << __SEQUENCE_BITS) - 1
     __last_timestamp: builtins.int = -1
     __sequence: builtins.int = 0
     node_id: builtins.int = -1

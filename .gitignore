@@ -8,3 +8,4 @@ wheels/
 test*.py
 # Virtual environments
 .venv
+.vs*
