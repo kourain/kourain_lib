@@ -7,13 +7,11 @@ import datetime
 
 
 class UUIDv7(UUID):
-    last_timestamp: builtins.int = 0
-    sequence: builtins.int = 0
 
     def __init__(
         self,
         from_int: builtins.int = 0,
-        random_A: tuple[bool, builtins.int] = (True, 0),
+        random_A: builtins.int = 0,
         hex: builtins.str = "",
     ) -> None:
         """Sinh UUIDv7 với cấu trúc chi tiết
@@ -33,21 +31,14 @@ class UUIDv7(UUID):
         # 1. Lấy timestamp 48 bit
         timestamp_ms = int(time.time() * 1000)
 
-        # Xử lý trường hợp timestamp trùng
-        if timestamp_ms == UUIDv7.last_timestamp:
-            UUIDv7.sequence += 1
-        else:
-            UUIDv7.sequence = 0
-            UUIDv7.last_timestamp = timestamp_ms
-
         # Đảm bảo timestamp 48 bit
         timestamp_48 = timestamp_ms & 0xFFFFFFFFFFFF
 
-        if random_A[0]:
-            # 2. Random A (12 bit) - có thể kết hợp với sequence
-            rand_a = (random.getrandbits(12) + UUIDv7.sequence) & 0xFFF
+        if 0 < random_A < 4096:
+            rand_a = random_A & 0xFFF
         else:
-            rand_a = random_A[1] & 0xFFF
+            # 2. Random A (12 bit) - có thể kết hợp với sequence
+            rand_a = random.getrandbits(12) & 0xFFF
 
         # 3. Version (4 bit) - luôn là 7
         version = 7
@@ -72,6 +63,7 @@ class UUIDv7(UUID):
         # Byte 8-9: rand_b1 (12 bit) + variant (2 bit) + bắt đầu rand_b2
         uuid_int |= rand_b1 << 54
         uuid_int |= variant << 62
+
         uuid_int |= rand_b2 & 0x3FFFFFFFFFFFFFFF
 
         # Chuyển thành định dạng UUID chuẩn
@@ -86,7 +78,7 @@ class UUIDv7(UUID):
     @property
     def time(self) -> builtins.int:
         """Lấy timestamp (ms) từ UUIDv7"""
-        timestamp_48 = (self.int >> 80) & 0xFFFFFFFFFFFF # type: ignore
+        timestamp_48 = (self.int >> 80) & 0xFFFFFFFFFFFF  # type: ignore
         return timestamp_48
 
     @property
@@ -98,12 +90,12 @@ class UUIDv7(UUID):
     @property
     def version(self) -> builtins.int:
         """Lấy version từ UUIDv7"""
-        return (self.int >> 64) & 0xF # type: ignore
+        return (self.int >> 64) & 0xF  # type: ignore
 
     @property
     def variant(self) -> str:
         """Lấy variant từ UUIDv7"""
-        variant_bits = (self.int >> 62) & 0x3 # type: ignore
+        variant_bits = (self.int >> 62) & 0x3  # type: ignore
         if (variant_bits & 0b10) == 0b10:
             return "RFC 9562"
         elif (variant_bits & 0b110) == 0b100:
@@ -120,23 +112,27 @@ class UUIDv7(UUID):
 
 
 class SnowflakeID(int):
-    EPOCH: Final[int] = int(datetime.datetime.now().timestamp() * 1000)  # Custom epoch (ms)
+    __EPOCH: builtins.int
     __NODE_ID_BITS: Final[int] = 10
     __SEQUENCE_BITS: Final[int] = 12
-    max_node_id: Final[int] = (1 << __NODE_ID_BITS) - 1
-    max_sequence: Final[int] = (1 << __SEQUENCE_BITS) - 1
+    MAX_NODE_ID: Final[int] = 1023
+    MAX_SEQUENCE: Final[int] = 4095
     __last_timestamp: builtins.int = -1
     __sequence: builtins.int = 0
     node_id: builtins.int = -1
 
     @staticmethod
-    def init(node_id: builtins.int) -> None:
+    def init(node_id: builtins.int, epoch: builtins.float | datetime.datetime) -> None:
         """Khởi tạo SnowflakeID với node_id"""
-        if node_id < 0 or node_id > SnowflakeID.max_node_id:
+        if node_id < 0 or node_id > SnowflakeID.MAX_NODE_ID:
             raise ValueError(
-                f"node_id phải trong khoảng 0 đến {SnowflakeID.max_node_id}"
+                f"node_id phải trong khoảng 0 đến {SnowflakeID.MAX_NODE_ID}"
             )
         SnowflakeID.node_id = node_id
+        if isinstance(epoch, datetime.datetime):
+            SnowflakeID.__EPOCH = int(epoch.timestamp() * 1000)
+        else:
+            SnowflakeID.__EPOCH = int(epoch)
 
     @staticmethod
     def from_int(snowflake_id: builtins.int) -> "SnowflakeID":
@@ -151,14 +147,14 @@ class SnowflakeID(int):
             raise ValueError(
                 "SnowflakeID chưa được khởi tạo. Vui lòng gọi SnowflakeID.init(node_id) trước."
             )
-        timestamp = int(time.time() * 1000) - SnowflakeID.EPOCH
+        timestamp = int(time.time() * 1000) - SnowflakeID.__EPOCH
         if timestamp == SnowflakeID.__last_timestamp:
             SnowflakeID.__sequence = (
                 SnowflakeID.__sequence + 1
-            ) & SnowflakeID.max_sequence
+            ) & SnowflakeID.MAX_SEQUENCE
             if SnowflakeID.__sequence == 0:
                 while timestamp <= SnowflakeID.__last_timestamp:
-                    timestamp = int(time.time() * 1000) - SnowflakeID.EPOCH
+                    timestamp = int(time.time() * 1000) - SnowflakeID.__EPOCH
         else:
             SnowflakeID.__sequence = 0
         SnowflakeID.__last_timestamp = timestamp
@@ -172,13 +168,13 @@ class SnowflakeID(int):
     @property
     def datetime(self) -> str:
         """Lấy datetime từ Snowflake ID"""
-        timestamp = (SnowflakeID.__last_timestamp + SnowflakeID.EPOCH) / 1000
+        timestamp = (SnowflakeID.__last_timestamp + SnowflakeID.__EPOCH) / 1000
         return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))
 
     @property
     def timestamp(self) -> int:
         """Lấy timestamp (ms) từ Snowflake ID"""
-        return SnowflakeID.__last_timestamp + SnowflakeID.EPOCH
+        return SnowflakeID.__last_timestamp + SnowflakeID.__EPOCH
 
     @property
     def node(self) -> int:
@@ -188,7 +184,7 @@ class SnowflakeID(int):
     @property
     def sequence(self) -> int:
         """Lấy sequence từ Snowflake ID"""
-        return self & SnowflakeID.max_sequence
+        return self & SnowflakeID.MAX_SEQUENCE
 
     @property
     def uuid7(self) -> UUIDv7:
