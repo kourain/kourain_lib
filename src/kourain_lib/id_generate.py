@@ -1,32 +1,38 @@
 import builtins
 import time
-from typing import Final
+from typing import Final, overload
 from uuid import UUID, SafeUUID
 import random
 import datetime
 
 
 class UUIDv7(UUID):
-
-    def __init__(
-        self,
-        from_int: builtins.int = 0,
-        random_A: builtins.int = 0,
-        hex: builtins.str = "",
-    ) -> None:
-        """Sinh UUIDv7 với cấu trúc chi tiết
-        - random_A: (bool, int) - Nếu bool là True, sinh random 12 bit A, nếu False dùng int làm A
-        - from_int: int - Nếu khác 0, tạo UUIDv7 từ int này
-        - hex: str - Nếu khác rỗng, tạo UUIDv7 từ chuỗi hex này
-        Nếu cả from_int và hex đều không được cung cấp, sẽ sinh UUIDv7 mới hoàn toàn ngẫu nhiên.
+    @overload
+    def __init__(self) -> None:
+        """Sinh UUIDv7 hoàn toàn ngẫu nhiên
         """
+    @overload
+    def __init__(self, *, from_int: builtins.int) -> None:
+        """Tạo UUIDv7 từ int
+        - from_int: int - Nếu khác 0, tạo UUIDv7 từ int này
+        """
+    @overload
+    def __init__(self, *, uuid_hex: builtins.str) -> None:
+        """Tạo UUIDv7 từ chuỗi hex
+        - uuid_hex: str - Nếu khác rỗng, tạo UUIDv7 từ chuỗi hex này
+        """
+    @overload
+    def __init__(self, *, random_A: builtins.int = 0, random_B1: builtins.int = 0) -> None:
+        """Sinh UUIDv7 với cấu trúc chi tiết
+        - random_A: int - Nếu int khác 0, dùng làm random 12 bit A(Device_Id 1 - 4095), nếu 0 sinh random 12 bit A mới
+        - random_B1: int - Nếu int khác 0, dùng làm random 12 bit B1(Worker_Id 1 - 4095), nếu 0 sinh random 12 bit B1 mới
+        """
+    def __init__(self, from_int: builtins.int = 0, random_A: builtins.int = 0, random_B1: builtins.int = 0, uuid_hex: builtins.str = "") -> None:
         if from_int != 0:
-            super().__init__(
-                hex=from_int.to_bytes(16, byteorder="big").hex(), is_safe=SafeUUID.safe
-            )
+            super().__init__(hex=from_int.to_bytes(16, byteorder="big").hex(), is_safe=SafeUUID.safe)
             return
-        if hex:
-            super().__init__(hex=hex, is_safe=SafeUUID.safe)
+        if uuid_hex:
+            super().__init__(hex=uuid_hex, is_safe=SafeUUID.safe)
             return
         # 1. Lấy timestamp 48 bit
         timestamp_ms = int(time.time() * 1000)
@@ -37,14 +43,17 @@ class UUIDv7(UUID):
         if 0 < random_A < 4096:
             rand_a = random_A & 0xFFF
         else:
-            # 2. Random A (12 bit) - có thể kết hợp với sequence
+            # 2. Random A (12 bit)
             rand_a = random.getrandbits(12) & 0xFFF
 
         # 3. Version (4 bit) - luôn là 7
         version = 7
 
         # 4. Random B phần 1 (12 bit)
-        rand_b1 = random.getrandbits(12)
+        if 0 < random_B1 < 4096:
+            rand_b1 = random_B1 & 0xFFF
+        else:
+            rand_b1 = random.getrandbits(12) & 0xFFF
 
         # 5. Variant (2 bit) - luôn là 10
         variant = 0b10
@@ -88,9 +97,19 @@ class UUIDv7(UUID):
         return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp_ms / 1000))
 
     @property
+    def device_id(self) -> builtins.int:
+        """Lấy Device ID (random A) từ UUIDv7"""
+        return (self.int >> 68) & 0xFFF  # type: ignore
+
+    @property
     def version(self) -> builtins.int:
         """Lấy version từ UUIDv7"""
         return (self.int >> 64) & 0xF  # type: ignore
+
+    @property
+    def worker_id(self) -> builtins.int:
+        """Lấy Worker ID (random B1) từ UUIDv7"""
+        return (self.int >> 54) & 0xFFF  # type: ignore
 
     @property
     def variant(self) -> str:
@@ -108,7 +127,7 @@ class UUIDv7(UUID):
     @staticmethod
     def from_int(uuid_int: builtins.int) -> "UUIDv7":
         """Tạo UUIDv7 từ int"""
-        return UUIDv7(uuid_int)
+        return UUIDv7(from_int=uuid_int)
 
 
 class SnowflakeID(int):
@@ -125,9 +144,7 @@ class SnowflakeID(int):
     def init(node_id: builtins.int, epoch: builtins.float | datetime.datetime) -> None:
         """Khởi tạo SnowflakeID với node_id"""
         if node_id < 0 or node_id > SnowflakeID.MAX_NODE_ID:
-            raise ValueError(
-                f"node_id phải trong khoảng 0 đến {SnowflakeID.MAX_NODE_ID}"
-            )
+            raise ValueError(f"node_id phải trong khoảng 0 đến {SnowflakeID.MAX_NODE_ID}")
         SnowflakeID.node_id = node_id
         if isinstance(epoch, datetime.datetime):
             SnowflakeID.__EPOCH = int(epoch.timestamp() * 1000)
@@ -144,25 +161,17 @@ class SnowflakeID(int):
     def __new__(cls) -> "SnowflakeID":
         """Sinh Snowflake ID"""
         if SnowflakeID.node_id == -1:
-            raise ValueError(
-                "SnowflakeID chưa được khởi tạo. Vui lòng gọi SnowflakeID.init(node_id) trước."
-            )
+            raise ValueError("SnowflakeID chưa được khởi tạo. Vui lòng gọi SnowflakeID.init(node_id) trước.")
         timestamp = int(time.time() * 1000) - SnowflakeID.__EPOCH
         if timestamp == SnowflakeID.__last_timestamp:
-            SnowflakeID.__sequence = (
-                SnowflakeID.__sequence + 1
-            ) & SnowflakeID.MAX_SEQUENCE
+            SnowflakeID.__sequence = (SnowflakeID.__sequence + 1) & SnowflakeID.MAX_SEQUENCE
             if SnowflakeID.__sequence == 0:
                 while timestamp <= SnowflakeID.__last_timestamp:
                     timestamp = int(time.time() * 1000) - SnowflakeID.__EPOCH
         else:
             SnowflakeID.__sequence = 0
         SnowflakeID.__last_timestamp = timestamp
-        snowflake_id = (
-            (timestamp << (SnowflakeID.__NODE_ID_BITS + SnowflakeID.__SEQUENCE_BITS))
-            | (SnowflakeID.node_id << SnowflakeID.__SEQUENCE_BITS)
-            | SnowflakeID.__sequence
-        )
+        snowflake_id = (timestamp << (SnowflakeID.__NODE_ID_BITS + SnowflakeID.__SEQUENCE_BITS)) | (SnowflakeID.node_id << SnowflakeID.__SEQUENCE_BITS) | SnowflakeID.__sequence
         return super().__new__(cls, snowflake_id)
 
     @property
